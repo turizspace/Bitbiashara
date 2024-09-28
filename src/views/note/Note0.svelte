@@ -1,0 +1,333 @@
+<script>
+
+import { onMount, onDestroy } from 'svelte';
+
+import NDK, { NDKNip07Signer } from "@nostr-dev-kit/ndk";
+
+import Icon from '@iconify/svelte'; // Ensure you have this installed
+
+let eventsKind1 = [];
+
+let profiles = {};
+
+let isLoading = true;
+
+let ndk;
+
+let nip07signer;
+
+let subscriptionKind1;
+
+let subscriptionKind0;
+
+onMount(async () => {
+
+try {
+
+nip07signer = new NDKNip07Signer();
+
+// Fetch the user's public key
+
+const user = await nip07signer.user();
+
+const userPubkey = user.pubkey;
+
+console.log("User public key:", userPubkey);
+
+// Initialize NDK with the signer
+
+ndk = new NDK({
+
+explicitRelayUrls: [
+'wss://relay.snort.social',
+'wss://relay.primal.net',
+'wss://relay.plebstr.com',
+'wss://nostr-02.dorafactory.org'
+
+
+],
+
+signer: nip07signer
+
+});
+
+// Connect to the relay
+
+await ndk.connect();
+
+console.log("Connected to relay");
+
+// Subscribe to events of kind 1
+
+subscriptionKind1 = ndk.subscribe({
+
+kinds: [30023],
+authors: ['06830f6cb5925bd82cca59bda848f0056666dff046c5382963a997a234da40c5']
+});
+
+// Handle incoming events of kind 1
+
+subscriptionKind1.on('event', (event) => {
+
+console.log("Kind 1 event received:", event);
+
+eventsKind1 = [...eventsKind1, event];
+
+isLoading = false; // Stop loading once the first event is received
+
+});
+
+// Subscribe to events of kind 0
+
+subscriptionKind0 = ndk.subscribe({
+
+kinds: [0],
+authors: ['06830f6cb5925bd82cca59bda848f0056666dff046c5382963a997a234da40c5']
+
+
+});
+
+// Handle incoming events of kind 0
+
+subscriptionKind0.on('event', (event) => {
+
+
+try {
+
+const profile = JSON.parse(event.content); // Parse the content field
+
+profiles[event.pubkey] = profile; // Store the parsed profile data
+
+} catch (error) {
+
+console.error("Error parsing profile content:", error);
+
+}
+
+});
+
+// Handle subscription errors
+
+subscriptionKind1.on('error', (error) => {
+
+console.error("Subscription error (Kind 1):", error);
+
+});
+
+subscriptionKind0.on('error', (error) => {
+
+console.error("Subscription error (Kind 0):", error);
+
+});
+
+} catch (error) {
+
+console.error("Error during onMount:", error);
+
+}
+
+});
+
+onDestroy(() => {
+
+// Clean up subscriptions and connections when the component is destroyed
+
+if (subscriptionKind1) {
+
+
+}
+
+if (subscriptionKind0) {
+
+
+}
+
+if (ndk) {
+
+
+}
+
+});
+
+function handleZap(lud16) {
+
+alert(`Zap address: ${lud16}`);
+
+}
+
+</script>
+
+<style>
+
+.loading {
+
+font-size: 18px;
+
+color: #007bff;
+
+margin-bottom: 10px;
+
+}
+
+.content-card {
+
+border: 1px solid #ddd;
+
+border-radius: 8px;
+
+padding: 16px;
+
+max-width: 600px;
+
+margin: 16px auto;
+
+box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+overflow: hidden;
+
+}
+
+.profile-card {
+
+display: flex;
+
+align-items: center;
+
+margin-bottom: 16px;
+
+}
+
+.profile-card img {
+
+border-radius: 50%;
+
+width: 80px;
+
+height: 80px;
+
+margin-right: 16px;
+
+}
+
+.profile-card div {
+
+display: flex;
+
+flex-direction: column;
+
+}
+
+.profile-card h3 {
+
+margin: 0;
+
+font-size: 18px;
+
+}
+
+.profile-card p {
+
+margin: 0;
+
+font-size: 14px;
+
+color: #666;
+
+}
+
+.zap-button {
+
+background-color: #f7d74e;
+
+border: none;
+
+border-radius: 4px;
+
+padding: 8px 16px;
+
+font-size: 14px;
+
+cursor: pointer;
+
+display: flex;
+
+align-items: center;
+
+margin-top: 8px;
+
+}
+
+.zap-button:hover {
+
+background-color: #f5c141;
+
+}
+
+.zap-icon {
+
+margin-left: 8px;
+
+}
+
+.content-card pre {
+
+white-space: pre-wrap;
+
+word-break: break-word;
+
+}
+
+</style>
+
+<div>
+{#if isLoading}
+
+<div class="loading">Loading events...</div>
+
+{/if}
+
+{#if eventsKind1.length > 0}
+
+{#each eventsKind1 as event (event.id)}
+
+{#if profiles[event.pubkey]}
+
+<div class="content-card">
+
+<div class="profile-card">
+
+<img src={profiles[event.pubkey].picture || 'https://via.placeholder.com/80'} alt="Profile Picture">
+
+<div>
+
+<h3>{profiles[event.pubkey].name || 'Unknown'}</h3>
+
+<button class="zap-button" on:click={() => handleZap(profiles[event.pubkey].lud16)}>
+
+Zap
+
+<span class="zap-icon">
+
+<Icon icon="meteocons:lightning-bolt-fill" />
+
+</span>
+
+</button>
+
+</div>
+
+</div>
+
+<pre>{event.content}</pre>
+
+<p>Posted on: {new Date(event.created_at * 1000).toLocaleString()}</p>
+
+</div>
+
+{/if}
+
+{/each}
+
+{/if}
+
+</div>
